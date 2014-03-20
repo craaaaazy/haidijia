@@ -26,9 +26,45 @@
 <hr>
 <div class="rate" id="rate">
 <label>今日汇率： 人民币对日币是5.96</label></div>
+
 <?php
-	echo "Hello PHP!";
+// XML取得
+$xml = file_get_contents('http://www.google.com/ig/calculator?hl=en&q=1USD=?JPY');
+
+echo $xml;
+// XML パーサー作ってパースする
+$parser = xml_parser_create();
+xml_parse_into_struct($parser, $xml, $values, $idx);
+xml_parser_free($parser);
+// とりあえずDB接続
+$con = mysql_connect('localhost', 'root', 'jinrenzhe');
+mysql_select_db('currencies');
+mysql_query('set names utf8');
+// 挿入用のSQL
+$sql_base = 'insert into currencies(base, target, value, inverse, created, modified)values("%s", "%s", %f, %f, "%s", now());';
+
+$date = null;
+foreach ($idx['DC:VALUE'] as $key => $val) {
+        if ($date == null) {
+                // RSSの構造によりdateが1個はじめにかぶるから1個ずらす
+                $date = date('Y-n-j H:i:s', strtotime($values[$idx['DC:DATE'][$key + 1]]['value']));
+        }
+        $data = array(
+                'value' => $values[$val]['value'],
+                'base' => $values[$idx['DC:BASECURRENCY'][$key]]['value'],
+                'target' => $values[$idx['DC:TARGETCURRENCY'][$key]]['value'],
+                'date' => $date,
+        );
+        $data['inverse'] = 1.0 / $data['value'];
+        $sql = sprintf($sql_base, $data['base'], $data['target'],
+                                $data['value'], $data['inverse'],
+                                $data['date']);
+        mysql_query($sql);
+}
+// おしまい
+mysql_close($con);
 ?>
+
 </div>
 </body>
 </html>
